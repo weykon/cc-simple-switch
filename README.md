@@ -27,9 +27,9 @@ ln -sf "$(pwd)/ccss" ~/bin/ccss
 
 ```bash
 ccss list
-ccss save guodaxia
+ccss save evolink
 ccss save minimax
-ccss use guodaxia
+ccss use evolink
 ccss use settings.minimax.json
 ccss current
 ```
