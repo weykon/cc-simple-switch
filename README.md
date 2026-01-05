@@ -45,10 +45,21 @@ ccss add minimax ~/.claude/settings.json
 ```bash
 ccss list
 ccss save minimax
+
+# import an existing json into a profile
+ccss add minimax /path/to/settings.json
+# or infer name from filename
+ccss add /path/to/settings.minimax.json
+# overwrite existing profile
+ccss add minimax /path/to/settings.json --force
+
 ccss use evolink
 ccss use settings.minimax.json
 ccss current
 ```
+
+Notes:
+- If `python3` exists, `ccss add` validates the JSON before copying.
 
 ## Release
 
