@@ -1,8 +1,8 @@
 # cc-simple-switch
 
-**CCSS = Claude Code Switch Settings**
+## **Claude Code Switch Settings (CCSS)**
 
-A tiny switcher for Claude Code `~/.claude/settings.json`.
+A simple switcher for Claude Code `~/.claude/settings.json`.
 
 ## Install
 
