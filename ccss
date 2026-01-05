@@ -12,8 +12,9 @@ ccss - simple Claude settings.json switcher
 Usage:
   ccss list
   ccss current
-  ccss save <name>        # save current live settings.json -> settings.<name>.json
-  ccss use <name>         # activate settings.<name>.json as settings.json (symlink)
+  ccss save <name>                  # save current live settings.json -> settings.<name>.json
+  ccss add <name> <path> [--force]  # copy json file into settings.<name>.json
+  ccss use <name>                   # activate settings.<name>.json as settings.json (symlink)
   ccss show <name>
   ccss remove <name>
 
@@ -130,6 +131,47 @@ case "$cmd" in
     cp -L "$LIVE_SETTINGS" "$dst"
     echo "$name" > "$ACTIVE_PTR" 2>/dev/null || true
     echo "saved -> $dst"
+    ;;
+
+  add|import)
+    ensure_dir
+
+    force="0"
+    if [[ "${4:-}" == "--force" || "${3:-}" == "--force" ]]; then
+      force="1"
+    fi
+
+    name="${2:-}"
+    src="${3:-}"
+
+    # Allow: ccss add /path/to/settings.xxx.json  (infer name)
+    if [[ -n "$name" && -z "$src" && "$name" == *"/"* && -f "$name" ]]; then
+      src="$name"
+      name="$(resolve_profile_name "$src")"
+    fi
+
+    [[ -n "$name" ]] || { echo "missing <name>" >&2; exit 2; }
+    [[ -n "$src" ]] || { echo "missing <path>" >&2; exit 2; }
+    [[ -f "$src" ]] || { echo "file not found: $src" >&2; exit 1; }
+
+    dst="$(profile_path "$name")"
+    if [[ -e "$dst" && "$force" != "1" ]]; then
+      echo "profile already exists: $dst (use --force to overwrite)" >&2
+      exit 1
+    fi
+
+    # Optional JSON validation if python3 exists
+    if command -v python3 >/dev/null 2>&1; then
+      python3 - "$src" <<'PY' || { echo "invalid json: $src" >&2; exit 1; }
+import json,sys
+p=sys.argv[1]
+with open(p,'r',encoding='utf-8') as f:
+  json.load(f)
+PY
+    fi
+
+    cp -f "$src" "$dst"
+    echo "added -> $dst"
     ;;
 
   use)

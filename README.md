@@ -32,6 +32,9 @@ ln -sf "$(pwd)/ccss" ~/bin/ccss
 # snapshot your current live config into a named profile
 ccss save evolink
 
+# or import an existing json into a profile
+ccss add minimax ~/.claude/settings.json
+
 # or create profiles manually:
 #   ~/.claude/settings.minimax.json
 #   ~/.claude/settings.evolink.json
@@ -59,7 +62,7 @@ Push a tag like `v0.1.0` and GitHub Actions will publish a release with assets.
 
 ## TODO
 
-- [ ] Add an `add/import` command to create a profile from an existing json file (e.g. `ccss add <name> <path>`).
+- [ ] Add `ccss add` enhancements: support stdin (`ccss add <name> -`) and schema-aware validation.
 
 ## Star History
 
