@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
+LIVE_SETTINGS="$CLAUDE_DIR/settings.json"
+ACTIVE_PTR="$CLAUDE_DIR/settings.active"
+
+usage() {
+  cat <<'EOF'
+ccss - simple Claude settings.json switcher
+
+Usage:
+  ccss list
+  ccss current
+  ccss save <name>        # save current live settings.json -> settings.<name>.json
+  ccss use <name>         # activate settings.<name>.json as settings.json (symlink)
+  ccss show <name>
+  ccss remove <name>
+
+Notes:
+  - Profiles live in ~/.claude/settings.<name>.json
+  - Active profile name is recorded in ~/.claude/settings.active
+EOF
+}
+
+profile_path() {
+  local name="$1"
+  printf '%s/settings.%s.json' "$CLAUDE_DIR" "$name"
+}
+
+resolve_profile() {
+  local arg="$1"
+
+  # If user passed a path, use it directly.
+  if [[ "$arg" == *"/"* ]]; then
+    if [[ -f "$arg" ]]; then
+      echo "$arg"
+      return 0
+    fi
+    return 1
+  fi
+
+  # Accept:
+  # - minimax
+  # - settings.minimax.json
+  # - minimax.json
+  local name="$arg"
+  name="${name#settings.}"
+  name="${name%.json}"
+
+  local target
+  target="$(profile_path "$name")"
+  if [[ -f "$target" ]]; then
+    echo "$target"
+    return 0
+  fi
+
+  # Also allow passing the literal filename under ~/.claude
+  if [[ -f "$CLAUDE_DIR/$arg" ]]; then
+    echo "$CLAUDE_DIR/$arg"
+    return 0
+  fi
+
+  return 1
+}
+
+resolve_profile_name() {
+  local target="$1"
+  local bn
+  bn="$(basename "$target")"
+  bn="${bn#settings.}"
+  bn="${bn%.json}"
+  echo "$bn"
+}
+
+ensure_dir() {
+  mkdir -p "$CLAUDE_DIR"
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  -h|--help|help)
+    usage
+    ;;
+
+  list)
+    ensure_dir
+    shopt -s nullglob
+    for f in "$CLAUDE_DIR"/settings.*.json; do
+      bn="$(basename "$f")"
+      # skip settings.json / settings.default.json / settings.active.json (if any)
+      [[ "$bn" == "settings.json" ]] && continue
+      [[ "$bn" == "settings.default.json" ]] && continue
+      [[ "$bn" == "settings.active.json" ]] && continue
+      printf '%s\n' "$bn"
+    done
+    ;;
+
+  current)
+    if [[ -f "$ACTIVE_PTR" ]]; then
+      cat "$ACTIVE_PTR"
+      exit 0
+    fi
+    if [[ -L "$LIVE_SETTINGS" ]]; then
+      # show symlink target basename if possible
+      target="$(readlink "$LIVE_SETTINGS" || true)"
+      basename "$target"
+      exit 0
+    fi
+    echo "(unknown)"
+    ;;
+
+  save)
+    name="${2:-}"
+    [[ -n "$name" ]] || { echo "missing <name>" >&2; exit 2; }
+    ensure_dir
+
+    if [[ ! -e "$LIVE_SETTINGS" ]]; then
+      echo "live settings not found: $LIVE_SETTINGS" >&2
+      exit 1
+    fi
+
+    dst="$(profile_path "$name")"
+    if [[ -e "$dst" ]]; then
+      echo "profile already exists: $dst" >&2
+      exit 1
+    fi
+
+    # -L: follow symlink so we copy actual JSON content
+    cp -L "$LIVE_SETTINGS" "$dst"
+    echo "$name" > "$ACTIVE_PTR" 2>/dev/null || true
+    echo "saved -> $dst"
+    ;;
+
+  use)
+    arg="${2:-}"
+    [[ -n "$arg" ]] || { echo "missing <name|settings.name.json|/path/to/file.json>" >&2; exit 2; }
+    ensure_dir
+
+    target="$(resolve_profile "$arg" || true)"
+    if [[ -z "$target" ]]; then
+      echo "profile not found: $(profile_path "${arg#settings.}" | sed 's/\.json$//').json" >&2
+      exit 1
+    fi
+
+    name="$(resolve_profile_name "$target")"
+
+    # first time: keep a backup of the current live file (if it is a real file)
+    if [[ -e "$LIVE_SETTINGS" && ! -L "$LIVE_SETTINGS" && ! -f "$CLAUDE_DIR/settings.default.json" ]]; then
+      cp "$LIVE_SETTINGS" "$CLAUDE_DIR/settings.default.json"
+    fi
+
+    ln -sfn "$target" "$LIVE_SETTINGS"
+    echo "$name" > "$ACTIVE_PTR"
+    echo "active -> settings.$name.json"
+    ;;
+
+  show)
+    arg="${2:-}"
+    [[ -n "$arg" ]] || { echo "missing <name|settings.name.json|/path/to/file.json>" >&2; exit 2; }
+    target="$(resolve_profile "$arg" || true)"
+    if [[ -z "$target" ]]; then
+      echo "profile not found" >&2
+      exit 1
+    fi
+    cat "$target"
+    ;;
+
+  remove)
+    arg="${2:-}"
+    [[ -n "$arg" ]] || { echo "missing <name|settings.name.json|/path/to/file.json>" >&2; exit 2; }
+    target="$(resolve_profile "$arg" || true)"
+    if [[ -z "$target" ]]; then
+      echo "profile not found" >&2
+      exit 1
+    fi
+    rm -f "$target"
+    echo "removed $target"
+    ;;
+
+  *)
+    echo "unknown command: $cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
