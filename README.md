@@ -67,9 +67,19 @@ Push a tag like `v0.1.0` and GitHub Actions will publish a release with assets.
 
 ## How it works
 
+ccss keeps multiple **profile files** and makes Claude Code read the *active one* by swapping a symlink.
+
 - Profiles: `~/.claude/settings.<name>.json`
-- Active live file: `~/.claude/settings.json` (symlink)
-- Active pointer: `~/.claude/settings.active` (plain text)
+- Active live file Claude reads: `~/.claude/settings.json` (symlink → one profile)
+- Active pointer (for humans): `~/.claude/settings.active` (plain text)
+
+```mermaid
+flowchart TD
+  A[settings.&lt;name&gt;.json profiles\n~/.claude/settings.*.json] -->|ccss use &lt;name&gt;| B[settings.json\n~/.claude/settings.json\n(symlink)]
+  B --> C[Claude Code reads settings.json]
+  A -->|ccss list/show/remove| A
+  D[settings.active\n~/.claude/settings.active] <-->|ccss current/use| B
+```
 
 ## TODO
 
