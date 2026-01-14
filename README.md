@@ -60,6 +60,7 @@ ccss current
 
 Notes:
 - If `python3` exists, `ccss add` validates the JSON before copying.
+- If you run `ccss add` / `ccss remove` without required args in a TTY, it will prompt you interactively.
 
 ## Release
 

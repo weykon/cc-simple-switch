@@ -12,11 +12,11 @@ ccss - simple Claude settings.json switcher
 Usage:
   ccss list
   ccss current
-  ccss save <name>                  # save current live settings.json -> settings.<name>.json
-  ccss add <name> <path> [--force]  # copy json file into settings.<name>.json
-  ccss use <name>                   # activate settings.<name>.json as settings.json (symlink)
+  ccss save <name>                        # save current live settings.json -> settings.<name>.json
+  ccss add [<name>] [<path>] [--force]    # copy json file into settings.<name>.json (prompts if missing)
+  ccss use <name>                         # activate settings.<name>.json as settings.json (symlink)
   ccss show <name>
-  ccss remove <name>
+  ccss remove [<name>]                    # prompts + confirm (tty)
 
 Notes:
   - Profiles live in ~/.claude/settings.<name>.json
@@ -76,6 +76,26 @@ resolve_profile_name() {
 
 ensure_dir() {
   mkdir -p "$CLAUDE_DIR"
+}
+
+is_tty() {
+  [[ -t 0 && -t 1 ]]
+}
+
+prompt_var() {
+  local __var="$1" prompt="$2" default="${3:-}" val
+  if [[ -n "$default" ]]; then
+    read -r -p "$prompt [$default]: " val
+    val="${val:-$default}"
+  else
+    read -r -p "$prompt: " val
+  fi
+  printf -v "$__var" '%s' "$val"
+}
+
+valid_profile_name() {
+  local name="$1"
+  [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]]
 }
 
 cmd="${1:-help}"
@@ -150,7 +170,15 @@ case "$cmd" in
       name="$(resolve_profile_name "$src")"
     fi
 
+    if [[ -z "$name" ]] && is_tty; then
+      prompt_var name "Profile name"
+    fi
     [[ -n "$name" ]] || { echo "missing <name>" >&2; exit 2; }
+    valid_profile_name "$name" || { echo "invalid <name>: $name (allowed: A-Z a-z 0-9 . _ -)" >&2; exit 2; }
+
+    if [[ -z "$src" ]] && is_tty; then
+      prompt_var src "Source JSON path" "$LIVE_SETTINGS"
+    fi
     [[ -n "$src" ]] || { echo "missing <path>" >&2; exit 2; }
     [[ -f "$src" ]] || { echo "file not found: $src" >&2; exit 1; }
 
@@ -210,12 +238,31 @@ PY
 
   remove)
     arg="${2:-}"
+    if [[ -z "$arg" ]] && is_tty; then
+      prompt_var arg "Profile name to remove"
+    fi
     [[ -n "$arg" ]] || { echo "missing <name|settings.name.json|/path/to/file.json>" >&2; exit 2; }
+
     target="$(resolve_profile "$arg" || true)"
     if [[ -z "$target" ]]; then
       echo "profile not found" >&2
       exit 1
     fi
+
+    name="$(resolve_profile_name "$target")"
+    if [[ -L "$LIVE_SETTINGS" ]]; then
+      active_target="$(readlink "$LIVE_SETTINGS" || true)"
+      if [[ "$active_target" == "$target" ]]; then
+        echo "cannot remove active profile: $name (ccss use <other> first)" >&2
+        exit 1
+      fi
+    fi
+
+    if is_tty; then
+      read -r -p "Remove settings.$name.json? [y/N] " ans
+      [[ "$ans" == "y" || "$ans" == "Y" ]] || { echo "aborted"; exit 0; }
+    fi
+
     rm -f "$target"
     echo "removed $target"
     ;;
